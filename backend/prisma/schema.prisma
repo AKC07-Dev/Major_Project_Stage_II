@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("CARETAKER") // CARETAKER, PATIENT, ADMIN
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Device {
+  id              String   @id @default(uuid())
+  deviceId        String   @unique // e.g. SMB-ESP32-001
+  name            String
+  apiKey          String
+  status          String   @default("OFFLINE") // ONLINE, OFFLINE
+  lastSeen        DateTime?
+  firmwareVersion String   @default("v1.0.0")
+  wifiSignal      Int      @default(0) // RSSI dBm
+  wifiSsid        String?
+  ipAddress       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  schedules       Schedule[]
+  events          MedicationEvent[]
+  heartbeats      DeviceHeartbeat[]
+}
+
+model Medicine {
+  id           String   @id @default(uuid())
+  name         String
+  dosage       String?
+  instructions String?
+  boxNumber    Int      @default(1) // 1 or 2
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  schedules    Schedule[]
+  events       MedicationEvent[]
+}
+
+model Schedule {
+  id          String   @id @default(uuid())
+  medicineId  String
+  deviceId    String
+  startTime   String   // e.g. "08:00"
+  endTime     String   // e.g. "09:00"
+  startHour   Int
+  startMinute Int
+  endHour     Int
+  endMinute   Int
+  boxNumber   Int      // 1 or 2
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  medicine    Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  device      Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  events      MedicationEvent[]
+}
+
+model MedicationEvent {
+  id          String   @id @default(uuid())
+  scheduleId  String?
+  medicineId  String?
+  deviceId    String
+  boxNumber   Int
+  eventType   String   // MEDICINE_REMINDER, MEDICINE_TAKEN, MEDICINE_MISSED, BOX_OPENED
+  status      String   // TAKEN, MISSED, PENDING
+  timestamp   DateTime @default(now())
+  metadata    String?  // Additional context / raw JSON
+
+  schedule    Schedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  medicine    Medicine? @relation(fields: [medicineId], references: [id], onDelete: SetNull)
+  device      Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([timestamp])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  type      String   // REMINDER, TAKEN, MISSED, OFFLINE, ONLINE, SYSTEM
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  sentAt    DateTime @default(now())
+}
+
+model DeviceHeartbeat {
+  id              String   @id @default(uuid())
+  deviceId        String
+  timestamp       DateTime @default(now())
+  wifiSignal      Int
+  firmwareVersion String?
+
+  device          Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+}
